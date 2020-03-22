@@ -1,0 +1,10 @@
+{
+  "profiles": {
+    "Coravel-Demo-ConsoleApp": {
+      "commandName": "Project"
+    },
+    "Docker": {
+      "commandName": "Docker"
+    }
+  }
+}
