@@ -2,7 +2,9 @@
 using Coravel.Scheduling.Schedule.Interfaces;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.DependencyInjection.Extensions;
 using Microsoft.Extensions.Hosting;
+using RedLockNet;
 using RedLockNet.SERedis;
 using RedLockNet.SERedis.Configuration;
 using System;
@@ -29,43 +31,40 @@ namespace Coravel_Demo_ConsoleApp
                    })
                    .ConfigureServices((hostContext, services) =>
                    {
+                       services.AddSingleton<IDistributedLockFactory>(sp =>
+                       {
+                           var endPoints = new List<RedLockEndPoint>
+                           {
+                               new DnsEndPoint("redis", 6379)
+                           };
+                           return RedLockFactory.Create(endPoints);
+                       });
+
+
+
                        services.AddScheduler();
+
+                       services.AddSingleton<RedisMutex>();
+
+                       services.Replace(ServiceDescriptor.Singleton<IMutex>(sp => sp.GetService<RedisMutex>()));
                    })
                    .Build();
 
-            var endPoints = new List<RedLockEndPoint>
-            {
-                new DnsEndPoint("redis", 6379)
-            };
-            var redlockFactory = RedLockFactory.Create(endPoints);
+
 
             host.Services.UseScheduler(scheduler =>
             {
                 scheduler.Schedule(() =>
                 {
                     //operacao 1
-                  
-
-                    using (var redisLock = redlockFactory.CreateLock(
-                        resource: "lock:operacao:1",
-                        expiryTime: TimeSpan.FromSeconds(10),
-                        waitTime: TimeSpan.FromSeconds(20),
-                        retryTime: TimeSpan.FromSeconds(2))
-                        )
-                    {
-                        var localSeq = seq++;
-
-                        if (redisLock.IsAcquired)
-                        {
-                            Console.WriteLine($"Begin {localSeq} - {redisLock.IsAcquired}");
-                            Thread.Sleep(TimeSpan.FromSeconds(4));
-                            Console.WriteLine($"\t\t END {localSeq}");
-                        }
-                        else
-                            Console.WriteLine($"\t\t {localSeq} não executada!");
-                    }
+                    var localSeq = seq++;
+                    Console.WriteLine($"Begin {localSeq}");
+                    Thread.Sleep(TimeSpan.FromSeconds(4));
+                    Console.WriteLine($"\t\t END {localSeq}");
                 })
-                .EverySeconds(2);
+                .EverySeconds(2)
+                .PreventOverlapping("redlock:lock:operacao:2")
+                ;
             });
 
             host.Run();
